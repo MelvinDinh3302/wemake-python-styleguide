@@ -512,7 +512,6 @@ def another_wrong_if():
     return True
 
 
-
 class ClassWithWrongContents((lambda: object)()):  # noqa: WPS606
     __slots__ = ['a', 'a']  # noqa: WPS607
 
@@ -806,6 +805,37 @@ try:  # noqa: WPS328
 except TypeError as raise_from_itself:
     my_print(raise_from_itself)
     raise raise_from_itself from raise_from_itself  # noqa: WPS469
+
+from wemake_python_styleguide.violations.naming import CustomShortNameViolation
+from wemake_python_styleguide.visitors.naming.short_name import CustomShortNameValidator
+
+
+
+def test_custom_short_name_validator(self):
+    """Test custom short name validator."""
+
+    def error_callback(violation):
+        raise AssertionError(f"Unexpected violation: {violation}")
+
+    validator = CustomShortNameValidator(error_callback)
+
+    # Valid custom short names
+    validator.check_name("x")
+    validator.check_name("y")
+    validator.check_name("z")
+
+    # Invalid custom short names
+    with pytest.raises(AssertionError):
+        validator.check_name("xx")
+        validator.check_name("1")
+        validator.check_name("X")
+        validator.check_name("_")
+
+
+# This allows running the test case directly using `pytest` or similar test runners
+if __name__ == "__main__":
+    test = NoQAFixtureTest()
+    test.test_custom_short_name_validator()
 
 
 class TestClass(**{}):  # noqa: WPS470

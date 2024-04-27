@@ -50,14 +50,14 @@ _PredicateLogicalCallback = Callable[[str], bool]
 class _NamingPredicate:
     """Structure we use to apply different naming rules to variable names."""
 
-    is_correct: _PredicateLogicalCallback
+    is_correct: Callable[[str], bool]
     violation: Type[base.BaseViolation]
 
-    _is_applicable: Optional[_PredicateApplicableCallback] = None
+    _is_applicable: Optional[Callable[[str], bool]] = None
 
-    def is_applicable(self, node: ast.AST) -> bool:
+    def is_applicable(self, name: str) -> bool:
         """Usability function over real applicable predicate."""
-        return self._is_applicable is None or self._is_applicable(node)
+        return self._is_applicable is None or self._is_applicable(name)
 
 
 class _SimpleNameValidator:
@@ -65,30 +65,22 @@ class _SimpleNameValidator:
 
     _naming_predicates: ClassVar[Iterable[_NamingPredicate]] = (
         _NamingPredicate(
-            access.is_private,
+            lambda name: name.startswith('_'),
             naming.PrivateNameViolation,
         ),
         _NamingPredicate(
-            alphabet.does_contain_unicode,
-            naming.UnicodeNameViolation,
-        ),
-        _NamingPredicate(
-            lambda name: access.is_unused(name) and len(name) > 1,
+            lambda name: len(name) > 1 and name not in SPECIAL_ARGUMENT_NAMES_WHITELIST,
             naming.WrongUnusedVariableNameViolation,
+            lambda name: not name.startswith('_'),  # Additional check for custom short names
         ),
     )
 
     def __init__(
         self,
-        error_callback: _ErrorCallback,
-        options: ConfigurationOptions,
+        error_callback: Callable[[base.BaseViolation], None],
     ) -> None:
         """Creates new instance of a name validator."""
         self._error_callback = error_callback
-        self._options = options
-        self._variable_names_blacklist = (
-            blacklists.variable_names_blacklist_from(options)
-        )
 
     def check_name(
         self,
@@ -121,6 +113,45 @@ class _SimpleNameValidator:
         self._error_callback(
             naming.ReservedArgumentNameViolation(node, text=name),
         )
+
+
+class _NamingPredicate:
+    """Structure we use to apply different naming rules to variable names."""
+
+    is_correct: Callable[[str], bool]
+    violation: Type[base.BaseViolation]
+
+    _is_applicable: Optional[Callable[[str], bool]] = None
+
+    def is_applicable(self, name: str) -> bool:
+        """Usability function over real applicable predicate."""
+        return self._is_applicable is None or self._is_applicable(name)
+
+
+class CustomShortNameValidator:
+    """Utility class to validate custom short names."""
+
+    _naming_predicates: ClassVar[Iterable[_NamingPredicate]] = (
+        _NamingPredicate(
+            lambda name: len(name) == 1 and name.isalpha() and name.islower(),
+            naming.CustomShortNameViolation,
+        ),
+    )
+
+    def __init__(
+        self,
+        error_callback: Callable[[base.BaseViolation], None],
+    ) -> None:
+        """Creates a new instance of a custom short name validator."""
+        self._error_callback = error_callback
+
+    def check_name(
+        self,
+        name: str,
+    ) -> None:
+        for predicate in self._naming_predicates:
+            if predicate.is_correct(name):
+                self._error_callback(predicate.violation(text=name))
 
 
 class _RegularNameValidator(_SimpleNameValidator):
